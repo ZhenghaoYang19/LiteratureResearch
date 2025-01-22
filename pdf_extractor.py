@@ -103,7 +103,6 @@ class PDFExtractor:
                     institution = self._clean_affiliation(match.group(2))  # 第二个捕获组是机构名称
                     if institution:  # 只保存非空的机构名称
                         affiliation_dict[number] = institution
-                        print(f"Found institution {number}: {institution}")  # 调试信息
                 
                 # 按序号排序获取机构列表
                 affiliations = [affiliation_dict[i] for i in sorted(affiliation_dict.keys()) if i in affiliation_dict]
