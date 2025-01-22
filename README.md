@@ -1,4 +1,4 @@
-# AI4Fusion Literature Research
+# AI4 AI4Fusion Literature Research
 
 An LLM tool for crawling and analyzing AI-related papers in the field of fusion research. Currently supports paper crawling from the journal "Nuclear Fusion".
 
