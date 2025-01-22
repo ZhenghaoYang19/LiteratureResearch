@@ -14,13 +14,12 @@ class PDFExtractor:
         try:
             with pdfplumber.open(pdf_path) as pdf:
                 first_page = pdf.pages[1].extract_text() or ''
-
                 # 查找发布日期的常见模式
                 # 例如: "Published 30 Octorber 2019"
                 date_patterns = [
-                    r'Published\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})',
-                    # r'Accepted\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})',
-                    # r'Received\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})'
+                    r'Published\s*(\d{1,2}\s*[A-Za-z]+\s*\d{4})',  
+                    # r'Accepted\s*(\d{1,2}\s*[A-Za-z]+\s*\d{4})',
+                    # r'Received\s*(\d{1,2}\s*[A-Za-z]+\s*\d{4})'
                 ]
                 
                 for pattern in date_patterns:
@@ -39,6 +38,8 @@ class PDFExtractor:
         将日期字符串转换为标准格式 (YYYY/MM/DD)
         """
         try:
+            # 移除所有空格后重新插入单个空格
+            date_str = ' '.join(re.findall(r'\d+|[A-Za-z]+', date_str))
             # 月份映射
             month_map = {
                 'January': '01', 'February': '02', 'March': '03', 'April': '04',
@@ -58,57 +59,54 @@ class PDFExtractor:
 
     def extract_affiliations(self, pdf_path):
         """
-        从PDF中提取机构信息
+        从PDF中提取第一作者单位和第二作者单位
         返回: (first_institution, second_institution)
         """
         try:
             with pdfplumber.open(pdf_path) as pdf:
-                # 获取第一页和第二页文本
-                first_page = pdf.pages[0].extract_text() or ''
                 second_page = pdf.pages[1].extract_text() if len(pdf.pages) > 1 else ''
-                
-                # 合并文本以便搜索
-                text = first_page + '\n' + second_page
-                
-                # 查找机构信息的模式
-                affiliations = []
+                text = second_page
                 
                 # 机构关键词（支持多语言）
                 institution_keywords = (
                     # 英语
-                    r'University|Institute|Laboratory|Center|Centre|Department|School|'
+                    r'University|Institute|Laboratory|Center|Centre|Department|School|Physics|Consortium|' 
                     # 德语
                     r'Universität|Institut|Zentrum|Abteilung|Schule|'
                     # 法语
                     r'Université|Institut|Laboratoire|Centre|École|'
                     # 中文
-                    r'大学|研究所|实验室|中心|学院|研究院|'
+                    r'大学|研究所|实验室|中心|学院|研究院|物理|'
                     # 日语
                     r'大学|研究所|実験室|センター|'
                     # 俄语
-                    r'Университет|Институт|Лаборатория|Центр'
+                    r'Университет|Институт|Лаборатория|Центр|'
+                    # 西班牙语
+                    r'Universidad|Instituto|Laboratorio|Centro|Facultad|Departamento|Escuela|'
+                    # 葡萄牙语
+                    r'Universidade|Instituto|Laboratório|Centro|Faculdade|Departamento|Escola|'
+                    # 意大利语
+                    r'Università|Istituto|Laboratorio|Centro|Dipartimento|Scuola|Consorzio'
                 )
                 
-                # 方法1: 查找数字标记的机构（支持1-9的标记）
-                affiliation_pattern = fr'(?m)^[1-9]\s+(.*?(?:{institution_keywords}).*?)(?=$|\n|\d\s+)'
-                matches = re.finditer(affiliation_pattern, text)
+                # 方法1：匹配编号的机构
+                # 1. 使用 (?m) 开启多行模式
+                # 2. 使用 \s* 来处理可能缺失的空格
+                # 3. 使用 [^\n]* 来匹配除换行外的所有字符
+                affiliation_pattern = fr'(?m)^(\d)\s*([^\n]*?(?:{institution_keywords})[^\n]*?)(?=\n\d|\n\s*$|$)'
+                matches = list(re.finditer(affiliation_pattern, text))
                 
-                # 用字典存储机构信息，键为序号
+                # 直接存储匹配结果
                 affiliation_dict = {}
                 for match in matches:
-                    # 找到行开头的数字
-                    line_start = text[:match.start()].rfind('\n') + 1
-                    if line_start == 0:
-                        line_start = 0
-                    number_match = re.match(r'^(\d+)', text[line_start:match.start() + 5])
-                    if number_match:
-                        number = int(number_match.group(1))
-                        institution = self._clean_affiliation(match.group(1))
+                    number = int(match.group(1))  # 第一个捕获组是数字
+                    institution = self._clean_affiliation(match.group(2))  # 第二个捕获组是机构名称
+                    if institution:  # 只保存非空的机构名称
                         affiliation_dict[number] = institution
-
+                        print(f"Found institution {number}: {institution}")  # 调试信息
                 
                 # 按序号排序获取机构列表
-                affiliations = [affiliation_dict[i] for i in sorted(affiliation_dict.keys())]
+                affiliations = [affiliation_dict[i] for i in sorted(affiliation_dict.keys()) if i in affiliation_dict]
                 
                 # 如果方法1失败，使用方法2
                 if not affiliations:
@@ -143,14 +141,14 @@ class PDFExtractor:
         # 移除邮箱地址
         text = re.sub(r'\S+@\S+', '', text)
         
-        # 移除多余的空格和换行
+        # 移除多余的空格和换行，但保留一个空格
         text = ' '.join(text.split())
         
-        # 只保留有意义的标点符号和字母数字
-        text = re.sub(r'[^\w\s,.-]', '', text)
+        # 保留所有Unicode字符、数字、空格和常用标点符号
+        text = re.sub(r'[^\w\s,.()\'"/-àáâãäçèéêëìíîïñòóôõöùúûüýÀÁÂÃÄÇÈÉÊËÌÍÎÏÑÒÓÔÕÖÙÚÛÜÝ]', '', text)
         
-        # 移除孤立的数字
-        text = re.sub(r'\s+\d+\s+', ' ', text)
+        # 移除孤立的数字，但保留邮政编码和门牌号
+        text = re.sub(r'(?<!\d)\b\d+\b(?!\d)', '', text)
         
         # 移除前后空格
         text = text.strip()

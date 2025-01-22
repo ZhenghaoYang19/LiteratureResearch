@@ -1,4 +1,4 @@
-# Python
+# Python related
 __pycache__/
 *.py[cod]
 *$py.class
@@ -25,7 +25,7 @@ venv/
 env/
 ENV/
 
-# IDE
+# IDE files
 .idea/
 .vscode/
 *.swp
@@ -37,6 +37,7 @@ ENV/
 # Project specific
 Papers/
 downloaded_html/
+test_pdf_extractor.py
 html_downloader.py
 llm.py
 *.xlsx
@@ -53,7 +54,7 @@ llm.py
 *.onnx
 model_weights/
 
-# Temp files
+# Temporary files
 temp/
 tmp/
 .temp/

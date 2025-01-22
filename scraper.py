@@ -2,11 +2,11 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 from modelscope import AutoModelForCausalLM, AutoTokenizer
-# from selenium import webdriver
-# from selenium.webdriver.chrome.options import Options
-# from selenium.webdriver.common.by import By
-# from selenium.webdriver.support.ui import WebDriverWait
-# from selenium.webdriver.support import expected_conditions as EC
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from time import sleep
 from random import uniform, choice
 import torch
@@ -50,25 +50,16 @@ class PaperScraper:
         self.min_interval = 5  # 最小请求间隔（秒）
         self.last_request_time = 0  # 上次请求时间
         
-    def get_page_content(self, volume, issue):
-        """获取指定卷期的页面内容"""
-        if self.journal == "Nuclear Fusion":
-            url = f"https://iopscience.iop.org/issue/0029-5515/{volume}/{issue}"
-        else:
-            print(f"Unsupported journal: {self.journal}")
-            return None
-        
-        # 随机选择一个User-Agent
-        user_agents = [
+        # 添加 headers 相关的属性
+        self.current_headers = None
+        self.user_agents = [
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/120.0.0.0 Safari/537.36',
             'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0'
         ]
-        
-        # 随机选择一个Accept-Language
-        accept_languages = [
+        self.accept_languages = [
             'en-US,en;q=0.9',
             'en-GB,en;q=0.9',
             'en-CA,en;q=0.9',
@@ -76,26 +67,34 @@ class PaperScraper:
             'en,zh-CN;q=0.9,zh;q=0.8'
         ]
         
-        headers = {
-            'User-Agent': choice(user_agents),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': choice(accept_languages),
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-            'Cache-Control': 'max-age=0',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Sec-Fetch-User': '?1',
-            'DNT': '1'
-        }
-        
-        # # 添加代理
-        # proxies = {
-        #     'http': 'http://your_proxy_here',
-        #     'https': 'https://your_proxy_here'
-        # }
+    def get_headers(self, force_new=False):
+        """获取请求头，force_new为True时强制生成新的headers"""
+        if self.current_headers is None or force_new:
+            self.current_headers = {
+                'User-Agent': choice(self.user_agents),
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': choice(self.accept_languages),
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Cache-Control': 'max-age=0',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'DNT': '1'
+            }
+        return self.current_headers
+
+    def get_page_content(self, volume, issue, force_new_headers=False):
+        """获取指定卷期的页面内容"""
+        if self.journal == "Nuclear Fusion":
+            url = f"https://iopscience.iop.org/issue/0029-5515/{volume}/{issue}"
+        else:
+            print(f"Unsupported journal: {self.journal}")
+            return None
+
+        headers = self.get_headers(force_new=force_new_headers)
         
         try:
             session = requests.Session()
@@ -133,7 +132,7 @@ class PaperScraper:
             day, month, year = date_str.split()
             day = day.zfill(2)  # 确保日期是两位数
             month = month_map.get(month, '01')
-            
+            print(f"{year}/{month}/{day}")
             return f"{year}/{month}/{day}"
         except Exception as e:
             print(f"Error formatting date '{date_str}': {e}")
@@ -224,15 +223,13 @@ class PaperScraper:
         3. 主要发现和结论
         4. 应用场景和实验装置
         如果文章没有这些相关信息，则不用提及。
-        另外，"disruption", "stellarator"在磁约束核聚变中分别翻译为"破裂"和"仿星器"。
-        "SOL","ITER"则不用翻译。
         
         标题：{title}
         摘要：{abstract}
         """
         
         messages = [
-            {"role": "system", "content": "你是一个专业的核聚变领域专家。"},
+            {"role": "system", "content": "你是一个专业的核聚变领域专家。'disruption', 'stellarator', 'renormalization'分别翻译为'破裂', '仿星器', '重整化'。'SOL', 'ITER'则不用翻译。"},
             {"role": "user", "content": prompt}
         ]
         
@@ -278,7 +275,7 @@ class PaperScraper:
         """
         
         messages = [
-            {"role": "system", "content": "你是一个专业的核聚变领域专家。"},
+            {"role": "system", "content": "你是一个专业的核聚变领域专家。'disruption', 'stellarator', 'renormalization'分别翻译为'破裂', '仿星器', '重整化'。'SOL', 'ITER'则不用翻译。"},
             {"role": "user", "content": prompt}
         ]
         
@@ -398,7 +395,12 @@ class PaperScraper:
         """带重试机制的页面获取"""
         for attempt in range(max_retries):
             try:
-                content = self.get_page_content(volume, issue)
+                # 第三次重试时更换headers
+                force_new_headers = (attempt == 2)
+                if force_new_headers:
+                    print("Changing headers for final retry...")
+                
+                content = self.get_page_content(volume, issue, force_new_headers=force_new_headers)
                 if content and "We apologize for the inconvenience" not in content:
                     return content
                 
