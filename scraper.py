@@ -11,7 +11,7 @@ from time import sleep
 from random import uniform, choice
 import torch
 import os
-from pdf_extractor import PDFExtractor
+from PDFExtractor.pdf_extractor import PDFExtractor
 import time
 
 

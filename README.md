@@ -1,3 +1,5 @@
+[中文文档](README_CN.md)
+
 # AI4 AI4Fusion Literature Research
 
 An LLM tool for crawling and analyzing AI-related papers in the field of fusion research. Currently supports paper crawling from the journal "Nuclear Fusion".
@@ -20,8 +22,8 @@ An LLM tool for crawling and analyzing AI-related papers in the field of fusion 
 
 1. Clone the repository:
    ```bash
-   git clone [repository URL]
-   cd [project directory]
+   git clone https://github.com/ZhenghaoYang19/LiteratureResearch.git
+   cd LiteratureResearch
    ```
 
 2. Install dependencies:
@@ -118,4 +120,3 @@ limitations under the License.
 
 [Harry Young](https://github.com/ZhenghaoYang19)
 
-[中文文档](README_CN.md)
